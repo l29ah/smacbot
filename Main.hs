@@ -88,9 +88,9 @@ handleRoom opts sess room = do
 							sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 							pure ()
 						"llama":args -> do
-							llamaReply <- llama $ T.concat
-								[ "Please provide a short answer to the following: "
-								, T.unwords args
+							llamaReply <- llamaTemplated $ LlamaApplyTemplateRequest
+								[ LlamaMessage System "Provie a short answer to the following:"
+								, LlamaMessage User $ T.unwords args
 								]
 							fromMaybe (pure ()) $ do
 								answer <- llamaReply
