@@ -10,10 +10,10 @@ import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.String.Class as S
 import qualified Data.Text as T
+import Llama
 import Network.TLS
 import Network.Xmpp
 import Network.Xmpp.IM
-import Network.Xmpp.IM.PresenceTracker
 import Network.Xmpp.Internal hiding (priority, status)
 import Network.Xmpp.Extras.MUC
 import System.Console.GetOpt
@@ -87,6 +87,14 @@ handleRoom opts sess room = do
 								]
 							sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 							pure ()
+						"llama":args -> do
+							llamaReply <- llama $ T.concat
+								[ "Please provide a short answer to the following: "
+								, T.unwords args
+								]
+							fromMaybe (pure ()) $ do
+								answer <- llamaReply
+								pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 						_ -> pure ()
 					_-> pure ()
 				pure ()
