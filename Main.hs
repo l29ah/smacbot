@@ -6,6 +6,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
 import Data.List (uncons)
+import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.String.Class as S
 import qualified Data.Text as T
@@ -76,11 +77,8 @@ handleRoom opts sess room = do
 				case T.uncons $ bodyContent body of
 					Just ('^', cmd) -> case T.words cmd of
 						"r":args -> do
-							peers <- atomically $ getAvailablePeersFull sess
-							let occupants = map fromNonempty $ catMaybes $ map resourcepart_ $ filter (\(Jid local domain _) -> and
-								[ local == localpart_ parsedJid
-								, domain == domainpart_ parsedJid
-								]) peers
+							roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
+							let occupants = map fromNonempty $ catMaybes $ map resourcepart_ $ M.keys roomPeersPresences
 							let answer = T.concat
 								["Ready for "
 								, T.unwords args
