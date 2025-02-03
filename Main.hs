@@ -30,6 +30,7 @@ data Options = Options
 	, oResource :: String
 	, oVerbose :: Bool
 	, oNoTLSVerify :: Bool
+	, oLlamaURL :: String
 	} deriving (Eq, Show)
 
 defaultOptions = Options
@@ -39,6 +40,7 @@ defaultOptions = Options
 	, oResource = "hsendxmpp"
 	, oVerbose = False
 	, oNoTLSVerify = False
+	, oLlamaURL = "http://localhost:8080"
 	}
 
 options :: [OptDescr (Options -> Options)]
@@ -49,6 +51,7 @@ options =
 	, Option ['r']	["resource"]	(ReqArg	(\str o -> o { oResource = str }) "res")	"Use resource res for the sender [default: 'hsendxmpp']"
 	, Option ['v']	["verbose"]	(NoArg	(\o -> o { oVerbose = True }))			"Be verbose on what's happening on the wire"
 	, Option ['n']	["no-tls-verify"]	(NoArg	(\o -> o { oNoTLSVerify = True }))	"Accept TLS certificates without verification"
+	, Option ['l']	["llama-url"]	(ReqArg	(\str o -> o { oLlamaURL = str }) "url") $	"URL of llama-server to connect to for ^llama comand [default: '" ++ oLlamaURL defaultOptions ++ "']"
 	]
 
 getOpts :: IO (Options, [String])
@@ -88,7 +91,7 @@ handleRoom opts sess room = do
 							sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 							pure ()
 						"llama":args -> do
-							llamaReply <- llamaTemplated $ LlamaApplyTemplateRequest
+							llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
 								[ LlamaMessage System "Provie a short answer to the following:"
 								, LlamaMessage User $ T.unwords args
 								]
