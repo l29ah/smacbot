@@ -71,37 +71,38 @@ handleRoom opts sess room = do
 	either (\err -> error $ show $ stanzaErrorText err) (const $ pure ()) result
 	forever $ do
 		msg <- getMessage sess
-		let body = do
-			imm <- getIM msg
-			(h, _) <- uncons $ imBody imm
-			pure h
-		case body of
-			Just body -> do
-				case T.uncons $ bodyContent body of
-					Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
-						"r":args -> do
-							roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
-							let occupants = map fromNonempty $ catMaybes $ map resourcepart_ $ M.keys roomPeersPresences
-							let answer = T.concat
-								["Ready for "
-								, T.unwords args
-								, "? "
-								, T.unwords occupants
-								]
-							sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
-							pure ()
-						"llama":args -> do
-							llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
-								[ LlamaMessage System "Provie a short answer to the following:"
-								, LlamaMessage User $ T.unwords args
-								]
-							fromMaybe (pure ()) $ do
-								answer <- llamaReply
-								pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
-						_ -> pure ()
-					_-> pure ()
-				pure ()
-			_ -> pure ()
+		when (messageType msg == GroupChat) $ do
+			let body = do
+				imm <- getIM msg
+				(h, _) <- uncons $ imBody imm
+				pure h
+			case body of
+				Just body -> do
+					case T.uncons $ bodyContent body of
+						Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
+							"r":args -> do
+								roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
+								let occupants = map fromNonempty $ catMaybes $ map resourcepart_ $ M.keys roomPeersPresences
+								let answer = T.concat
+									["Ready for "
+									, T.unwords args
+									, "? "
+									, T.unwords occupants
+									]
+								sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
+								pure ()
+							"llama":args -> do
+								llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
+									[ LlamaMessage System "Provie a short answer to the following:"
+									, LlamaMessage User $ T.unwords args
+									]
+								fromMaybe (pure ()) $ do
+									answer <- llamaReply
+									pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
+							_ -> pure ()
+						_-> pure ()
+					pure ()
+				_ -> pure ()
 
 main :: IO ()
 main = do
