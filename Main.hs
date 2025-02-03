@@ -78,7 +78,7 @@ handleRoom opts sess room = do
 		case body of
 			Just body -> do
 				case T.uncons $ bodyContent body of
-					Just ('^', cmd) -> case T.words cmd of
+					Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
 						"r":args -> do
 							roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
 							let occupants = map fromNonempty $ catMaybes $ map resourcepart_ $ M.keys roomPeersPresences
