@@ -68,7 +68,7 @@ handleRoom opts sess room = do
 	let (roomName, roomServer, _) = jidToTexts parsedJid
 	let roomJid = fromJust $ jidFromTexts roomName roomServer $ Just $ S.toText $ oResource opts
 	result <- joinMUCResult roomJid (Just $ def { mhrMaxStanzas = Just 0}) sess
-	either (\err -> error $ show $ stanzaErrorText err) (const $ pure ()) result
+	either (error . show . stanzaErrorText) (const $ pure ()) result
 	forever $ do
 		msg <- getMessage sess
 		when (messageType msg == GroupChat) $ do
@@ -82,7 +82,7 @@ handleRoom opts sess room = do
 						Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
 							"r":args -> do
 								roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
-								let occupants = map fromNonempty $ catMaybes $ map resourcepart_ $ M.keys roomPeersPresences
+								let occupants = map fromNonempty $ mapMaybe resourcepart_ $ M.keys roomPeersPresences
 								let answer = T.concat
 									["Ready for "
 									, T.unwords args
@@ -118,7 +118,7 @@ main = do
 		then def { sessionStreamConfiguration = def { tlsParams = xmppDefaultParams { clientHooks = def { onServerCertificate = \_ _ _ _ -> pure [] } } } }
 		else def
 	eSess <- session server authData sessionConfiguration
-	let sess = either (error . show) id $ eSess
+	let sess = either (error . show) id eSess
 	sendPresence presenceOnline sess
 
 	handleRoom opts sess room
