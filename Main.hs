@@ -76,8 +76,8 @@ handleRoom opts sess room = do
 				imm <- getIM msg
 				(h, _) <- uncons $ imBody imm
 				pure h
-			case body of
-				Just body -> do
+			case (body, messageFrom msg >>= resourcepart) of
+				(Just body, Just resource) -> when (resource /= T.pack (oResource opts)) $ do -- ignore messages from yourself and without a body
 					case T.uncons $ bodyContent body of
 						Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
 							"r":args -> do
