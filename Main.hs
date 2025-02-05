@@ -114,9 +114,15 @@ main = do
 	let passWord = if null justEnvPassWord then oPassWord opts else justEnvPassWord
 
 	let authData = Just (fst $ fromJust (simpleAuth (S.toText $ oUserName opts) (S.toText passWord)), if null $ oResource opts then Nothing else Just $ S.toText $ oResource opts) :: AuthData
-	let sessionConfiguration = if oNoTLSVerify opts
+	let sessionConfiguration = (if oNoTLSVerify opts
 		then def { sessionStreamConfiguration = def { tlsParams = xmppDefaultParams { clientHooks = def { onServerCertificate = \_ _ _ _ -> pure [] } } } }
-		else def
+		else def)
+		{ enableRoster = False
+		, onConnectionClosed = \sess why -> do
+			putStrLn $ "Disconnected (" ++ show why ++ "). Reconnecting..."
+			void $ reconnect' sess
+			handleRoom opts sess room
+		}
 	eSess <- session server authData sessionConfiguration
 	let sess = either (error . show) id eSess
 	sendPresence presenceOnline sess
