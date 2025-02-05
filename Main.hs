@@ -99,6 +99,11 @@ handleRoom opts sess room = do
 								fromMaybe (pure ()) $ do
 									answer <- llamaReply
 									pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
+							"llamaraw":args -> do
+								llamaReply <- llama (oLlamaURL opts) $ T.unwords args
+								fromMaybe (pure ()) $ do
+									answer <- llamaReply
+									pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 							_ -> pure ()
 						_-> pure ()
 					pure ()
