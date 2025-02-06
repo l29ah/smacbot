@@ -78,6 +78,7 @@ handleRoom opts sess room = do
 				pure h
 			case (body, messageFrom msg >>= resourcepart) of
 				(Just body, Just resource) -> when (resource /= T.pack (oResource opts)) $ do -- ignore messages from yourself and without a body
+					let reply txt = pure $ void $ sendMessage ((simpleIM parsedJid $ T.concat [resource, ": ", txt]) { messageType = GroupChat }) sess
 					case T.uncons $ bodyContent body of
 						Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
 							"r":args -> do
@@ -98,12 +99,12 @@ handleRoom opts sess room = do
 									]
 								fromMaybe (pure ()) $ do
 									answer <- llamaReply
-									pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
+									reply answer
 							"llamaraw":args -> do
 								llamaReply <- llama (oLlamaURL opts) $ T.unwords args
 								fromMaybe (pure ()) $ do
 									answer <- llamaReply
-									pure $ void $ sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
+									reply answer
 							_ -> pure ()
 						_-> pure ()
 					pure ()
