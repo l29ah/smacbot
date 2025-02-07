@@ -97,7 +97,7 @@ handleRoom opts sess room = do
 								pure ()
 							"llama":args -> do
 								llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
-									[ LlamaMessage System "Provie a short answer to the following:"
+									[ LlamaMessage System "Provide a short answer to the following:"
 									, LlamaMessage User $ T.unwords args
 									]
 								maybe (pure ()) reply llamaReply
