@@ -20,6 +20,7 @@ import System.Console.GetOpt
 import System.Environment
 import System.Log.Logger
 
+import Paste
 
 passWordEnvVar = "SMACBOT_PASSWORD"
 
@@ -78,7 +79,9 @@ handleRoom opts sess room = do
 				pure h
 			case (body, messageFrom msg >>= resourcepart) of
 				(Just body, Just resource) -> when (resource /= T.pack (oResource opts)) $ do -- ignore messages from yourself and without a body
-					let reply txt = pure $ void $ sendMessage ((simpleIM parsedJid $ T.concat [resource, ": ", txt]) { messageType = GroupChat }) sess
+					let reply txt = do
+						pasted <- paste txt
+						void $ sendMessage ((simpleIM parsedJid $ T.concat [resource, ": ", pasted]) { messageType = GroupChat }) sess
 					case T.uncons $ bodyContent body of
 						Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
 							"r":args -> do
@@ -97,14 +100,10 @@ handleRoom opts sess room = do
 									[ LlamaMessage System "Provie a short answer to the following:"
 									, LlamaMessage User $ T.unwords args
 									]
-								fromMaybe (pure ()) $ do
-									answer <- llamaReply
-									reply answer
+								maybe (pure ()) reply llamaReply
 							"llamaraw":args -> do
 								llamaReply <- llama (oLlamaURL opts) $ T.unwords args
-								fromMaybe (pure ()) $ do
-									answer <- llamaReply
-									reply answer
+								maybe (pure ()) reply llamaReply
 							_ -> pure ()
 						_-> pure ()
 					pure ()
