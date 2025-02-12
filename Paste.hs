@@ -28,5 +28,4 @@ pasteTo0x0 text = do
     request <- parseRequest "POST https://0x0.st"
     request' <- formDataBody formData $ addRequestHeader "User-Agent" "smacbot" request
     response <- httpBS request'
-    print response
     pure $ T.init $ decodeUtf8 $ responseBody response
