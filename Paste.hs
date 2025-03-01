@@ -12,7 +12,9 @@ import Network.HTTP.Client.MultipartFormData
 
 -- |Function to check if text should be pasted
 shouldPaste :: Text -> Bool
-shouldPaste text = T.length text > 140 || T.any (== '\n') text
+-- IRC compliance
+--shouldPaste text = T.length text > 140 || T.any (== '\n') text
+shouldPaste text = T.length text > 500
 
 paste :: Text -> IO Text
 paste text = do
