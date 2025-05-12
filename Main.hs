@@ -122,12 +122,7 @@ main = do
 	let sessionConfiguration = (if oNoTLSVerify opts
 		then def { sessionStreamConfiguration = def { tlsParams = xmppDefaultParams { clientHooks = def { onServerCertificate = \_ _ _ _ -> pure [] } } } }
 		else def)
-		{ enableRoster = False
-		, onConnectionClosed = \sess why -> do
-			putStrLn $ "Disconnected (" ++ show why ++ "). Reconnecting..."
-			void $ reconnect' sess
-			handleRoom opts sess room
-		}
+		{ enableRoster = False }
 	eSess <- session server authData sessionConfiguration
 	let sess = either (error . show) id eSess
 	sendPresence presenceOnline sess
