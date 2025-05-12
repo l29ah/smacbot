@@ -32,6 +32,7 @@ data Options = Options
 	, oVerbose :: Bool
 	, oNoTLSVerify :: Bool
 	, oLlamaURL :: String
+	, oSystemMessage :: Maybe String
 	} deriving (Eq, Show)
 
 defaultOptions = Options
@@ -42,6 +43,7 @@ defaultOptions = Options
 	, oVerbose = False
 	, oNoTLSVerify = False
 	, oLlamaURL = "http://localhost:8080"
+	, oSystemMessage = Nothing
 	}
 
 options :: [OptDescr (Options -> Options)]
@@ -53,6 +55,7 @@ options =
 	, Option ['v']	["verbose"]	(NoArg	(\o -> o { oVerbose = True }))			"Be verbose on what's happening on the wire"
 	, Option ['n']	["no-tls-verify"]	(NoArg	(\o -> o { oNoTLSVerify = True }))	"Accept TLS certificates without verification"
 	, Option ['l']	["llama-url"]	(ReqArg	(\str o -> o { oLlamaURL = str }) "url") $	"URL of llama-server to connect to for ^llama comand [default: '" ++ oLlamaURL defaultOptions ++ "']"
+	, Option ['s']	["system-message"]	(OptArg	(\str o -> o { oSystemMessage = str }) "system-message")	"Add this system message to LLM query"
 	]
 
 getOpts :: IO (Options, [String])
@@ -96,8 +99,12 @@ handleRoom opts sess room = do
 								sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 								pure ()
 							"llama":args -> do
+								let presetSystemMessage = "Provide a short answer to the following:"
+								let systemMessage = T.pack $ case oSystemMessage opts of
+									Nothing -> presetSystemMessage
+									Just userSystemMessage -> userSystemMessage ++ ". " ++ presetSystemMessage
 								llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
-									[ LlamaMessage System "Provide a short answer to the following:"
+									[ LlamaMessage System systemMessage
 									, LlamaMessage User $ T.unwords args
 									]
 								maybe (pure ()) reply llamaReply
