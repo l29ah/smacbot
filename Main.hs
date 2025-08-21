@@ -63,13 +63,18 @@ getOpts = do
 		(o,n,[]  ) -> return (foldl (flip id) defaultOptions o, n)
 		(_,_,errs) -> ioError (userError (concat errs ++ usageInfo ("Usage: " ++ pn ++ " [options] <room1> [<room2> ...]") options))
 
-handleRoom :: Options -> Session -> String -> IO ()
-handleRoom opts sess room = do
+joinRoom opts sess room = do
+	let myNickname = T.pack $ oResource opts
 	let parsedJid = parseJid room
 	let (roomName, roomServer, _) = jidToTexts parsedJid
-	let roomJid = fromJust $ jidFromTexts roomName roomServer $ Just $ S.toText $ oResource opts
+	let roomJid = fromJust $ jidFromTexts roomName roomServer $ Just myNickname
 	result <- joinMUCResult roomJid (Just $ def { mhrMaxStanzas = Just 0}) sess
 	either (error . show . stanzaErrorText) (const $ pure ()) result
+
+handleRoom :: Options -> Session -> String -> IORef (Seq.Seq T.Text) -> IO ()
+handleRoom opts sess room roomContext = do
+	let myNickname = T.pack $ oResource opts
+	let parsedJid = parseJid room
 	forever $ do
 		msg <- getMessage sess
 		when (messageType msg == GroupChat) $ do
@@ -125,14 +130,18 @@ main = do
 		{ enableRoster = False
 		, onConnectionClosed = \sess why -> do
 			putStrLn $ "Disconnected (" ++ show why ++ "). Reconnecting..."
-			void $ reconnect' sess
-			handleRoom opts sess room
+			attempts <- reconnect' sess
+			putStrLn $ "Reconnected after " <> show attempts <> " attempts."
+			-- mandatory initial presence
+			void $ sendPresence presenceOnline sess
+			joinRoom opts sess room
 		}
 	eSess <- session server authData sessionConfiguration
 	let sess = either (error . show) id eSess
+	-- mandatory initial presence
 	sendPresence presenceOnline sess
-
-	handleRoom opts sess room
+	joinRoom opts sess room
+	handleRoom opts sess room roomContext
 
 	sendPresence presenceOffline sess
 	-- FIXME a workaround for https://github.com/l29ah/hsendxmpp/issues/1
