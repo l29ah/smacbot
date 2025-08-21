@@ -5,9 +5,13 @@ module Main where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
+import Data.Foldable
+import Data.IORef
 import Data.List (uncons)
 import qualified Data.Map as M
 import Data.Maybe
+import Data.Sequence (Seq(..))
+import qualified Data.Sequence as Seq
 import qualified Data.String.Class as S
 import qualified Data.Text as T
 import Llama
@@ -63,6 +67,13 @@ getOpts = do
 		(o,n,[]  ) -> return (foldl (flip id) defaultOptions o, n)
 		(_,_,errs) -> ioError (userError (concat errs ++ usageInfo ("Usage: " ++ pn ++ " [options] <room1> [<room2> ...]") options))
 
+pushToCircular :: IORef (Seq a) -> a -> IO ()
+pushToCircular ref msg = atomicModifyIORef' ref $ \log -> (
+	case log of
+		_ :<| init_ -> if Seq.length log >= 20 then init_ :|> msg else log :|> msg
+		_ -> log :|> msg
+	, ())
+
 joinRoom opts sess room = do
 	let myNickname = T.pack $ oResource opts
 	let parsedJid = parseJid room
@@ -83,35 +94,48 @@ handleRoom opts sess room roomContext = do
 				(h, _) <- uncons $ imBody imm
 				pure h
 			case (body, messageFrom msg >>= resourcepart) of
-				(Just body, Just resource) -> when (resource /= T.pack (oResource opts)) $ do -- ignore messages from yourself and without a body
-					let reply txt = do
-						pasted <- paste txt
-						void $ sendMessage ((simpleIM parsedJid $ T.concat [resource, ": ", pasted]) { messageType = GroupChat }) sess
-					case T.uncons $ bodyContent body of
-						Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
-							"r":args -> do
-								roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
-								let occupants = map fromNonempty $ mapMaybe resourcepart_ $ M.keys roomPeersPresences
-								let answer = T.concat
-									["Ready for "
-									, T.unwords args
-									, "? "
-									, T.unwords occupants
-									]
-								sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
-								pure ()
-							"llama":args -> do
-								llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
-									[ LlamaMessage System "Provide a short answer to the following:"
-									, LlamaMessage User $ T.unwords args
-									]
-								maybe (pure ()) reply llamaReply
-							"llamaraw":args -> do
-								llamaReply <- llama (oLlamaURL opts) $ T.unwords args
-								maybe (pure ()) reply llamaReply
-							_ -> pure ()
-						_-> pure ()
-					pure ()
+				(Just body, Just resource) -> do
+					-- got a new meaningful message, append to the log
+					let logMsg = T.concat ["<", resource, "> ", bodyContent body]
+					pushToCircular roomContext logMsg
+					when (resource /= myNickname) $ do -- ignore messages from yourself and without a body
+						let reply txt = do
+							pasted <- paste txt
+							void $ sendMessage ((simpleIM parsedJid $ T.concat [resource, ": ", pasted]) { messageType = GroupChat }) sess
+						case T.uncons $ bodyContent body of
+							Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
+								"r":args -> do
+									roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
+									let occupants = map fromNonempty $ mapMaybe resourcepart_ $ M.keys roomPeersPresences
+									let answer = T.concat
+										["Ready for "
+										, T.unwords args
+										, "? "
+										, T.unwords occupants
+										]
+									sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
+									pure ()
+								"llama":args -> do
+									llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
+										[ LlamaMessage System "Provide a short answer to the following:"
+										, LlamaMessage User $ T.unwords args
+										]
+									maybe (pure ()) reply llamaReply
+								"llamaraw":args -> do
+									llamaReply <- llama (oLlamaURL opts) $ T.unwords args
+									maybe (pure ()) reply llamaReply
+								_ -> pure ()
+							_-> pure ()
+						when (T.isPrefixOf myNickname $ bodyContent body) $ do
+							-- human-like call
+							context <- readIORef roomContext
+							let systemPrompt = T.concat	[ "You are a XMPP user "
+											, myNickname
+												, ". You are friendly, straight, informal, maybe ironic, but always informative. You will follow up to the last message, address the topic, and provide a ONE-LINE thoughtful and constructive response, without prepending your nickname. Try to helpfully surprise if you can."
+											]
+							llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest $
+								LlamaMessage System systemPrompt : map (LlamaMessage User) (toList context)
+							maybe (pure ()) (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 				_ -> pure ()
 
 main :: IO ()
@@ -124,6 +148,8 @@ main = do
 	let passWord = if null justEnvPassWord then oPassWord opts else justEnvPassWord
 
 	let authData = Just (fst $ fromJust (simpleAuth (S.toText $ oUserName opts) (S.toText passWord)), if null $ oResource opts then Nothing else Just $ S.toText $ oResource opts) :: AuthData
+	roomContext <- newIORef Seq.Empty
+
 	let sessionConfiguration = (if oNoTLSVerify opts
 		then def { sessionStreamConfiguration = def { tlsParams = xmppDefaultParams { clientHooks = def { onServerCertificate = \_ _ _ _ -> pure [] } } } }
 		else def)
