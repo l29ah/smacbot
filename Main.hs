@@ -4,6 +4,7 @@ module Main where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Data.Foldable
 import Data.IORef
@@ -14,6 +15,7 @@ import Data.Sequence (Seq(..))
 import qualified Data.Sequence as Seq
 import qualified Data.String.Class as S
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Llama
 import Network.TLS
 import Network.Xmpp
@@ -88,7 +90,8 @@ handleRoom opts sess room roomContext = do
 	let parsedJid = parseJid room
 	forever $ do
 		msg <- getMessage sess
-		when (messageType msg == GroupChat) $ do
+		let say x = void $ sendMessage ((simpleIM parsedJid x) { messageType = GroupChat }) sess
+		when (messageType msg == GroupChat) $ handle (\e -> say $ T.pack $ show (e :: SomeException)) $ do
 			let body = do
 				imm <- getIM msg
 				(h, _) <- uncons $ imBody imm
@@ -97,11 +100,17 @@ handleRoom opts sess room roomContext = do
 				(Just body, Just resource) -> do
 					-- got a new meaningful message, append to the log
 					let logMsg = T.concat ["<", resource, "> ", bodyContent body]
+					when (oVerbose opts) $ T.putStrLn logMsg
 					pushToCircular roomContext logMsg
 					when (resource /= myNickname) $ do -- ignore messages from yourself and without a body
 						let reply txt = do
+							when (oVerbose opts) $ T.putStrLn txt
 							pasted <- paste txt
-							void $ sendMessage ((simpleIM parsedJid $ T.concat [resource, ": ", pasted]) { messageType = GroupChat }) sess
+							say $ T.concat [resource, ": ", pasted]
+						let onLlamaError = reply "llama-server is offline"
+						let doLlama req = do
+							llamaReply <- llamaTemplated (oLlamaURL opts) req
+							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 						case T.uncons $ bodyContent body of
 							Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
 								"r":args -> do
@@ -116,14 +125,13 @@ handleRoom opts sess room roomContext = do
 									sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 									pure ()
 								"llama":args -> do
-									llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest
+									doLlama $ LlamaApplyTemplateRequest
 										[ LlamaMessage System "Provide a short answer to the following:"
 										, LlamaMessage User $ T.unwords args
 										]
-									maybe (pure ()) reply llamaReply
 								"llamaraw":args -> do
 									llamaReply <- llama (oLlamaURL opts) $ T.unwords args
-									maybe (pure ()) reply llamaReply
+									maybe onLlamaError reply llamaReply
 								_ -> pure ()
 							_-> pure ()
 						when (T.isPrefixOf myNickname $ bodyContent body) $ do
@@ -131,11 +139,10 @@ handleRoom opts sess room roomContext = do
 							context <- readIORef roomContext
 							let systemPrompt = T.concat	[ "You are a XMPP user "
 											, myNickname
-												, ". You are friendly, straight, informal, maybe ironic, but always informative. You will follow up to the last message, address the topic, and provide a ONE-LINE thoughtful and constructive response, without prepending your nickname. Try to helpfully surprise if you can."
+											, ". You are friendly, straight, informal, maybe ironic, but always informative. You will follow up to the last message, address the topic, and provide a ONE-LINE thoughtful and constructive response, without prepending your nickname. Try to helpfully surprise if you can."
 											]
-							llamaReply <- llamaTemplated (oLlamaURL opts) $ LlamaApplyTemplateRequest $
+							doLlama $ LlamaApplyTemplateRequest $
 								LlamaMessage System systemPrompt : map (LlamaMessage User) (toList context)
-							maybe (pure ()) (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 				_ -> pure ()
 
 main :: IO ()
