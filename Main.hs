@@ -115,6 +115,8 @@ handleRoom opts sess room roomContext = do
 							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 						case T.uncons $ bodyContent body of
 							Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
+								"test":_ -> do
+									say "passed"
 								"r":args -> do
 									roomPeersPresences <- atomically $ getPeerEntities parsedJid sess
 									let occupants = map fromNonempty $ mapMaybe resourcepart_ $ M.keys roomPeersPresences
