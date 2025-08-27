@@ -81,8 +81,10 @@ joinRoom opts sess room = do
 	let parsedJid = parseJid room
 	let (roomName, roomServer, _) = jidToTexts parsedJid
 	let roomJid = fromJust $ jidFromTexts roomName roomServer $ Just myNickname
-	result <- joinMUCResult roomJid (Just $ def { mhrMaxStanzas = Just 0}) sess
-	either (error . show . stanzaErrorText) (const $ pure ()) result
+	joinMUC roomJid (Just $ def { mhrMaxStanzas = Just 0 }) sess
+	-- to handle the case of our JID being already connected to the MUC under a different nickname, as seen with biboumi
+	-- XEP-0045, 7.6 Changing Nickname
+	sendPresence (presTo presence roomJid) sess
 
 handleRoom :: Options -> Session -> String -> IORef (Seq.Seq T.Text) -> IO ()
 handleRoom opts sess room roomContext = do
