@@ -11,7 +11,7 @@ maintainer:          zl29ah@gmail.com
 -- copyright:
 category:            Network, CLI, XMPP
 build-type:          Simple
-tested-with:         GHC == 9.8.4
+tested-with:         GHC == 9.12.2
 
 Source-repository head
   type:              git
