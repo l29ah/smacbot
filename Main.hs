@@ -76,6 +76,7 @@ pushToCircular ref msg = atomicModifyIORef' ref $ \log -> (
 		_ -> log :|> msg
 	, ())
 
+joinRoom :: Options -> Session -> String -> IO ()
 joinRoom opts sess room = do
 	let myNickname = T.pack $ oResource opts
 	let parsedJid = parseJid room
@@ -84,7 +85,7 @@ joinRoom opts sess room = do
 	joinMUC roomJid (Just $ def { mhrMaxStanzas = Just 0 }) sess
 	-- to handle the case of our JID being already connected to the MUC under a different nickname, as seen with biboumi
 	-- XEP-0045, 7.6 Changing Nickname
-	sendPresence (presTo presence roomJid) sess
+	void $ sendPresence (presTo presence roomJid) sess
 
 handleRoom :: Options -> Session -> String -> IORef (Seq.Seq T.Text) -> IO ()
 handleRoom opts sess room roomContext = do
