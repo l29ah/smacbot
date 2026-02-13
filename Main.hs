@@ -17,6 +17,7 @@ import qualified Data.String.Class as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Llama
+import Network.HTTP.Client
 import Network.TLS
 import Network.Xmpp
 import Network.Xmpp.IM
@@ -94,7 +95,8 @@ handleRoom opts sess room roomContext = do
 	forever $ do
 		msg <- getMessage sess
 		let say x = void $ sendMessage ((simpleIM parsedJid x) { messageType = GroupChat }) sess
-		when (messageType msg == GroupChat) $ handle (\e -> say $ T.pack $ show (e :: SomeException)) $ do
+		let sayPasted msg = handle (\e -> T.putStrLn $ T.pack $ show (e :: SomeException)) $ paste msg >>= say
+		when (messageType msg == GroupChat) $ handle (\e -> (\t -> T.putStrLn t >> sayPasted t) $ T.pack $ show (e :: SomeException)) $ do
 			let body = do
 				imm <- getIM msg
 				(h, _) <- uncons $ imBody imm
@@ -112,7 +114,7 @@ handleRoom opts sess room roomContext = do
 							say $ T.concat [resource, ": ", pasted]
 						let onLlamaError = reply "llama-server is offline"
 						let doLlama req = do
-							llamaReply <- llamaTemplated (oLlamaURL opts) req
+							llamaReply <- catch (llamaTemplated (oLlamaURL opts) req) $ \(HttpExceptionRequest _ e) -> pure $ pure $ T.show e
 							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 						case T.uncons $ bodyContent body of
 							Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
