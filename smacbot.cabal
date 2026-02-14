@@ -11,7 +11,7 @@ maintainer:          zl29ah@gmail.com
 -- copyright:
 category:            Network, CLI, XMPP
 build-type:          Simple
-tested-with:         GHC == 9.12.2
+tested-with:         GHC == 9.12.3
 
 Source-repository head
   type:              git
@@ -32,7 +32,7 @@ executable smacbot
                        pontarius-xmpp-extras >= 0.1.0.6 && < 0.2,
                        hslogger >= 1.2.8 && < 1.4,
                        string-class >= 0.1.7.0 && < 0.2,
-                       text >= 1.2.4.1 && < 2.2,
+                       text >= 2.1.2 && < 2.2,
                        tls >= 1.5.5 && < 2.2,
                        stm ^>= 2.5,
                        containers >= 0.6 && < 0.8,

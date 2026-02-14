@@ -12,7 +12,6 @@ jobs:
       fail-fast: false
       matrix:
         ghc:
-          - "9.8"
           - "9.10"
           - "9.12"
           - "latest"
