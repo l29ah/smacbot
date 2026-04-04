@@ -117,7 +117,7 @@ handleRoom opts sess room roomContext = do
 							llamaReply <- catch (llamaTemplated (oLlamaURL opts) req) $ \(HttpExceptionRequest _ e) -> pure $ pure $ T.show e
 							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 						case T.uncons $ bodyContent body of
-							Just ('^', cmd) -> void $ forkIO $ case T.words cmd of
+							Just ('^', cmd) -> void $ forkIO $ case T.splitOn " " cmd of
 								"test":_ -> do
 									say "passed"
 								"r":args -> do
