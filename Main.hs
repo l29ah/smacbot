@@ -175,6 +175,7 @@ main = do
 			-- mandatory initial presence
 			void $ sendPresence presenceOnline sess
 			joinRoom opts sess room
+			handleRoom opts sess room roomContext
 		}
 	eSess <- session server authData sessionConfiguration
 	let sess = either (error . show) id eSess
