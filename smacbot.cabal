@@ -35,7 +35,7 @@ executable smacbot
                        text >= 2.1.2 && < 2.2,
                        tls >= 1.5.5 && < 2.2,
                        stm ^>= 2.5,
-                       containers >= 0.6 && < 0.8,
+                       containers >= 0.6 && < 0.9,
                        llama-cpp-haskell >= 0.1 && < 0.3,
                        bytestring ^>= 0.12,
                        http-conduit ^>= 2.3,
