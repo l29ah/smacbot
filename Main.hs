@@ -182,7 +182,7 @@ main = do
 	-- mandatory initial presence
 	sendPresence presenceOnline sess
 	joinRoom opts sess room
-	handleRoom opts sess room roomContext
+	handle (\e -> print (e :: SomeException)) $ handleRoom opts sess room roomContext
 
 	sendPresence presenceOffline sess
 	-- FIXME a workaround for https://github.com/l29ah/hsendxmpp/issues/1
