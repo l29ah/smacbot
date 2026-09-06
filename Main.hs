@@ -135,7 +135,7 @@ handleRoom opts sess room roomContext = do
 									doLlama $ LlamaApplyTemplateRequest
 										[ LlamaMessage System "Provide a short answer to the following:"
 										, LlamaMessage User $ T.unwords args
-										]
+										] Nothing
 								"llamaraw":args -> do
 									llamaReply <- llama (oLlamaURL opts) $ T.unwords args
 									maybe onLlamaError reply llamaReply
@@ -148,15 +148,14 @@ handleRoom opts sess room roomContext = do
 											, myNickname
 											, ". You are friendly, straight, informal, maybe ironic, but always informative. You will follow up to the last message, address the topic, and provide a ONE-LINE thoughtful and constructive response, without prepending your nickname. Try to helpfully surprise if you can."
 											]
-							doLlama $ LlamaApplyTemplateRequest $
-								LlamaMessage System systemPrompt : map (LlamaMessage User) (toList context)
+							doLlama $ LlamaApplyTemplateRequest (LlamaMessage System systemPrompt : map (LlamaMessage User) (toList context)) Nothing
 				_ -> pure ()
 
 main :: IO ()
 main = do
 	(opts, [room]) <- getOpts
 	when (oVerbose opts) $ updateGlobalLogger "Pontarius.Xmpp" $ setLevel DEBUG
-	let server = if oServer opts == "" then error "no server specified" else oServer opts
+	let server = if oServer opts == "" then Prelude.error "no server specified" else oServer opts
 	envPassWord <- lookupEnv passWordEnvVar
 	let justEnvPassWord = fromMaybe "" envPassWord
 	let passWord = if null justEnvPassWord then oPassWord opts else justEnvPassWord
@@ -178,7 +177,7 @@ main = do
 			handleRoom opts sess room roomContext
 		}
 	eSess <- session server authData sessionConfiguration
-	let sess = either (error . show) id eSess
+	let sess = either (Prelude.error . show) id eSess
 	-- mandatory initial presence
 	sendPresence presenceOnline sess
 	joinRoom opts sess room
