@@ -14,6 +14,7 @@ import Data.Maybe
 import Data.Sequence (Seq(..))
 import qualified Data.Sequence as Seq
 import qualified Data.String.Class as S
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Llama
@@ -30,7 +31,6 @@ import System.Log.Logger
 import Paste
 
 passWordEnvVar = "SMACBOT_PASSWORD"
-
 data Options = Options
 	{ oUserName :: String
 	, oPassWord :: String
@@ -39,6 +39,7 @@ data Options = Options
 	, oVerbose :: Bool
 	, oNoTLSVerify :: Bool
 	, oLlamaURL :: String
+	, oLlamaModel :: Text
 	} deriving (Eq, Show)
 
 defaultOptions = Options
@@ -49,17 +50,19 @@ defaultOptions = Options
 	, oVerbose = False
 	, oNoTLSVerify = False
 	, oLlamaURL = "http://localhost:8080"
+	, oLlamaModel = "default"
 	}
 
 options :: [OptDescr (Options -> Options)]
 options =
-	[ Option ['u']	["username"]	(ReqArg	(\str o -> o { oUserName = str }) "user")	"Use this username to authenticate to the server"
-	, Option ['p']	["password"]	(ReqArg	(\str o -> o { oPassWord = str }) "password") $	"Use this password to authenticate to the server.\nThe password can also be provided via " ++ passWordEnvVar ++ " environment variable to avoid it leaking into process lists, and it will override the CLI option contents."
-	, Option ['j']	["jserver"]	(ReqArg	(\str o -> o { oServer = str }) "server")	"Connect to this server"
-	, Option ['r']	["resource"]	(ReqArg	(\str o -> o { oResource = str }) "res")	"Use resource res for the sender [default: 'hsendxmpp']"
-	, Option ['v']	["verbose"]	(NoArg	(\o -> o { oVerbose = True }))			"Be verbose on what's happening on the wire"
-	, Option ['n']	["no-tls-verify"]	(NoArg	(\o -> o { oNoTLSVerify = True }))	"Accept TLS certificates without verification"
-	, Option ['l']	["llama-url"]	(ReqArg	(\str o -> o { oLlamaURL = str }) "url") $	"URL of llama-server to connect to for ^llama comand [default: '" ++ oLlamaURL defaultOptions ++ "']"
+	[ Option ['u']	["username"]	(ReqArg	(\str o -> o { oUserName = str }) "user")		"Use this username to authenticate to the server"
+	, Option ['p']	["password"]	(ReqArg	(\str o -> o { oPassWord = str }) "password") $		"Use this password to authenticate to the server.\nThe password can also be provided via " ++ passWordEnvVar ++ " environment variable to avoid it leaking into process lists, and it will override the CLI option contents."
+	, Option ['j']	["jserver"]	(ReqArg	(\str o -> o { oServer = str }) "server")		"Connect to this server"
+	, Option ['r']	["resource"]	(ReqArg	(\str o -> o { oResource = str }) "res")		"Use resource res for the sender [default: 'hsendxmpp']"
+	, Option ['v']	["verbose"]	(NoArg	(\o -> o { oVerbose = True }))				"Be verbose on what's happening on the wire"
+	, Option ['n']	["no-tls-verify"]	(NoArg	(\o -> o { oNoTLSVerify = True }))		"Accept TLS certificates without verification"
+	, Option ['l']	["llama-url"]	(ReqArg	(\str o -> o { oLlamaURL = str }) "url") $		"URL of llama-server to connect to for llm comands [default: '" ++ oLlamaURL defaultOptions ++ "']"
+	, Option ['m']	["model"]	(ReqArg	(\str o -> o { oLlamaModel = T.pack str }) "model") $	"LLM name to call from llama-server for llm comands [default: '" ++ T.unpack (oLlamaModel defaultOptions) ++ "']"
 	]
 
 getOpts :: IO (Options, [String])
@@ -131,11 +134,19 @@ handleRoom opts sess room roomContext = do
 										]
 									sendMessage ((simpleIM parsedJid answer) { messageType = GroupChat }) sess
 									pure ()
+								"llm":args -> do
+									case args of
+										[] -> reply "syntax: ^llm <model name> <request>"
+										llm:input -> do
+											doLlama $ LlamaApplyTemplateRequest
+												[ LlamaMessage System "Provide a short answer to the following:"
+												, LlamaMessage User $ T.unwords input
+												] $ Just llm
 								"llama":args -> do
 									doLlama $ LlamaApplyTemplateRequest
 										[ LlamaMessage System "Provide a short answer to the following:"
 										, LlamaMessage User $ T.unwords args
-										] Nothing
+										] $ Just $ oLlamaModel opts
 								"llamaraw":args -> do
 									llamaReply <- llama (oLlamaURL opts) $ T.unwords args
 									maybe onLlamaError reply llamaReply
@@ -148,7 +159,7 @@ handleRoom opts sess room roomContext = do
 											, myNickname
 											, ". You are friendly, straight, informal, maybe ironic, but always informative. You will follow up to the last message, address the topic, and provide a ONE-LINE thoughtful and constructive response, without prepending your nickname. Try to helpfully surprise if you can."
 											]
-							doLlama $ LlamaApplyTemplateRequest (LlamaMessage System systemPrompt : map (LlamaMessage User) (toList context)) Nothing
+							doLlama $ LlamaApplyTemplateRequest (LlamaMessage System systemPrompt : map (LlamaMessage User) (toList context)) $ Just $ oLlamaModel opts
 				_ -> pure ()
 
 main :: IO ()
