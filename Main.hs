@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, Strict #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards, Strict #-}
 
 module Main where
 
@@ -80,6 +80,8 @@ pushToCircular ref msg = atomicModifyIORef' ref $ \log -> (
 		_ -> log :|> msg
 	, ())
 
+showModel LlamaModelInfo{..} = T.concat [lmiId, if null lmiAliases then "" else T.concat [" (", T.intercalate ", " lmiAliases, ")"]]
+
 joinRoom :: Options -> Session -> String -> IO ()
 joinRoom opts sess room = do
 	let myNickname = T.pack $ oResource opts
@@ -119,6 +121,9 @@ handleRoom opts sess room roomContext = do
 						let doLlama req = do
 							llamaReply <- catch (llamaTemplated (oLlamaURL opts) req) $ \(HttpExceptionRequest _ e) -> pure $ pure $ T.show e
 							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
+						let listmodels = do
+							result <- models (oLlamaURL opts)
+							maybe onLlamaError (reply . T.unlines . map showModel . filter (\x -> lmiAliases x /= [])) result
 						case T.uncons $ bodyContent body of
 							Just ('^', cmd) -> void $ forkIO $ case T.splitOn " " cmd of
 								"test":_ -> do
@@ -150,6 +155,8 @@ handleRoom opts sess room roomContext = do
 								"llamaraw":args -> do
 									llamaReply <- llama (oLlamaURL opts) $ T.unwords args
 									maybe onLlamaError reply llamaReply
+								"models":_ -> listmodels
+								"listmodels":_ -> listmodels
 								_ -> pure ()
 							_-> pure ()
 						when (T.isPrefixOf myNickname $ bodyContent body) $ do
