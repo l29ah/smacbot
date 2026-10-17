@@ -117,7 +117,7 @@ handleRoom opts sess room roomContext = do
 							when (oVerbose opts) $ T.putStrLn txt
 							pasted <- paste txt
 							say $ T.concat [resource, ": ", pasted]
-						let onLlamaError = reply "llama-server is offline"
+						let onLlamaError = reply "llama-server is bork"
 						let doLlama req = do
 							llamaReply <- catch (llamaTemplated (oLlamaURL opts) req) $ \(HttpExceptionRequest _ e) -> pure $ pure $ T.show e
 							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
