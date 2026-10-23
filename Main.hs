@@ -31,6 +31,7 @@ import System.Log.Logger
 import Paste
 
 passWordEnvVar = "SMACBOT_PASSWORD"
+contextLength = 100
 data Options = Options
 	{ oUserName :: String
 	, oPassWord :: String
@@ -76,7 +77,7 @@ getOpts = do
 pushToCircular :: IORef (Seq a) -> a -> IO ()
 pushToCircular ref msg = atomicModifyIORef' ref $ \log -> (
 	case log of
-		_ :<| init_ -> if Seq.length log >= 20 then init_ :|> msg else log :|> msg
+		_ :<| init_ -> if Seq.length log >= contextLength then init_ :|> msg else log :|> msg
 		_ -> log :|> msg
 	, ())
 
