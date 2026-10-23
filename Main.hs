@@ -145,12 +145,12 @@ handleRoom opts sess room roomContext = do
 										[] -> reply "syntax: ^llm <model name> <request>"
 										llm:input -> do
 											doLlama $ LlamaApplyTemplateRequest
-												[ LlamaMessage System "Provide a short answer to the following:"
+												[ LlamaMessage System "Provide an answer to the following:"
 												, LlamaMessage User $ T.unwords input
 												] $ Just llm
 								"llama":args -> do
 									doLlama $ LlamaApplyTemplateRequest
-										[ LlamaMessage System "Provide a short answer to the following:"
+										[ LlamaMessage System "Provide an answer to the following:"
 										, LlamaMessage User $ T.unwords args
 										] $ Just $ oLlamaModel opts
 								"llamaraw":args -> do
