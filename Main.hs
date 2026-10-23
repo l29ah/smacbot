@@ -18,7 +18,6 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Llama
-import Network.HTTP.Client
 import Network.TLS
 import Network.Xmpp
 import Network.Xmpp.IM
@@ -83,6 +82,26 @@ pushToCircular ref msg = atomicModifyIORef' ref $ \log -> (
 
 showModel LlamaModelInfo{..} = T.concat [lmiId, if null lmiAliases then "" else T.concat [" (", T.intercalate ", " lmiAliases, ")"]]
 
+-- How many extra attempts are made, and how long they are separated by, before
+-- a llama-server failure is reported to the user
+llamaRetries = 2
+llamaRetryDelay = 1000000 -- µs
+
+-- Log the failed llama-server request and answer with Nothing so that the
+-- caller can tell the failure apart from a reply
+llamaCallFailure :: SomeException -> IO (Maybe a)
+llamaCallFailure e = (putStrLn $ "llama-server call failed: " <> show e) >> pure Nothing
+
+-- llama-server requests fail either by throwing (unreachable server, HTTP
+-- error status) or by replying with an undecodable body (Nothing): retry
+-- either way and only report the failure once the retries are exhausted
+retryLlama :: Int -> IO (Maybe a) -> IO (Maybe a)
+retryLlama retries call = do
+	res <- handle llamaCallFailure call
+	case res of
+		Nothing -> if retries > 0 then threadDelay llamaRetryDelay >> retryLlama (retries - 1) call else pure Nothing
+		Just _ -> pure res
+
 joinRoom :: Options -> Session -> String -> IO ()
 joinRoom opts sess room = do
 	let myNickname = T.pack $ oResource opts
@@ -120,10 +139,10 @@ handleRoom opts sess room roomContext = do
 							say $ T.concat [resource, ": ", pasted]
 						let onLlamaError = reply "llama-server is bork"
 						let doLlama req = do
-							llamaReply <- catch (llamaTemplated (oLlamaURL opts) req) $ \(HttpExceptionRequest _ e) -> pure $ pure $ T.show e
+							llamaReply <- retryLlama llamaRetries $ llamaTemplated (oLlamaURL opts) req
 							maybe onLlamaError (reply . T.stripStart. snd . T.breakOnEnd "</think>") llamaReply
 						let listmodels = do
-							result <- models (oLlamaURL opts)
+							result <- retryLlama llamaRetries $ models (oLlamaURL opts)
 							maybe onLlamaError (reply . T.unlines . map showModel . filter (\x -> lmiAliases x /= [])) result
 						case T.uncons $ bodyContent body of
 							Just ('^', cmd) -> void $ forkIO $ case T.splitOn " " cmd of
@@ -154,7 +173,7 @@ handleRoom opts sess room roomContext = do
 										, LlamaMessage User $ T.unwords args
 										] $ Just $ oLlamaModel opts
 								"llamaraw":args -> do
-									llamaReply <- llama (oLlamaURL opts) $ T.unwords args
+									llamaReply <- retryLlama llamaRetries $ llama (oLlamaURL opts) $ T.unwords args
 									maybe onLlamaError reply llamaReply
 								"models":_ -> listmodels
 								"listmodels":_ -> listmodels
